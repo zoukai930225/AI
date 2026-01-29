@@ -382,12 +382,12 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
     }
 
     // 填充拖拽结束
-    const handleFillMouseUp = () => {
+    const handleFillMouseUp = async () => {
         document.removeEventListener('mousemove', handleFillMouseMove)
         document.removeEventListener('mouseup', handleFillMouseUp)
 
         if (fillState.value.isFilling && fillState.value.fillEndCell && fillState.value.fillDirection) {
-            executeFill()
+            await executeFill()
         }
 
         // 清除填充预览
@@ -467,7 +467,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
     }
 
     // 执行填充
-    const executeFill = () => {
+    const executeFill = async () => {
         const { fillEndCell, fillDirection } = fillState.value
         if (!fillEndCell || !fillDirection || !tableRef.value) return
 
@@ -564,8 +564,17 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         }
 
         if (fillDataList.length > 0) {
-            // 通知表格更新
-            table.reloadData(data)
+            // 保存滚动位置
+            const scrollTop = table.getScroll()?.scrollTop || 0
+            const scrollLeft = table.getScroll()?.scrollLeft || 0
+
+            // 通知表格更新（使用 reloadData 保持原数据引用）
+            await table.reloadData(data)
+
+            // 恢复滚动位置
+            nextTick(() => {
+                table.scrollTo(scrollLeft, scrollTop)
+            })
 
             // 调用回调
             onFill?.(fillDataList)
@@ -849,8 +858,17 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         }
 
         if (pasteDataList.length > 0) {
+            // 保存滚动位置
+            const scrollTop = table.getScroll()?.scrollTop || 0
+            const scrollLeft = table.getScroll()?.scrollLeft || 0
+
             // 通知表格更新
-            table.reloadData(data)
+            await table.reloadData(data)
+
+            // 恢复滚动位置
+            nextTick(() => {
+                table.scrollTo(scrollLeft, scrollTop)
+            })
 
             // 调用回调
             onPaste?.(pasteDataList)
