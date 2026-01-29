@@ -42,6 +42,7 @@ interface UseTextSelectionOptions {
     onCopy?: (text: string) => void
     onFill?: (fillDataList: FillData[]) => void  // 填充回调
     onPaste?: (pasteDataList: PasteData[]) => void  // 粘贴回调
+    onFillColumn?: (fillDataList: FillData[]) => void  // 填充整列回调
     excludeColumns?: string[]  // 排除的列（如操作列）
     fillableColumns?: string[] // 可填充的列，不设置则所有非排除列都可填充
 }
@@ -53,6 +54,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         onCopy,
         onFill,
         onPaste,
+        onFillColumn,
         excludeColumns = ['operation', 'checkbox'],
         fillableColumns
     } = options
@@ -256,6 +258,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
 
         fillHandle = document.createElement('div')
         fillHandle.className = 'vxe-fill-handle'
+        fillHandle.title = '拖拽填充，双击填充整列'
         fillHandle.style.cssText = `
             position: absolute;
             width: 8px;
@@ -270,6 +273,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
 
         // 填充柄的鼠标事件
         fillHandle.addEventListener('mousedown', handleFillHandleMouseDown)
+        fillHandle.addEventListener('dblclick', handleFillHandleDoubleClick)
     }
 
     // 更新填充柄位置
@@ -324,6 +328,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
     const removeFillHandle = () => {
         if (fillHandle) {
             fillHandle.removeEventListener('mousedown', handleFillHandleMouseDown)
+            fillHandle.removeEventListener('dblclick', handleFillHandleDoubleClick)
             fillHandle.remove()
             fillHandle = null
         }
@@ -344,6 +349,122 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
 
         document.addEventListener('mousemove', handleFillMouseMove)
         document.addEventListener('mouseup', handleFillMouseUp)
+    }
+
+    // 双击填充柄 - 一键填充整列（向下填充到最后一行）
+    const handleFillHandleDoubleClick = async (e: MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        if (!enabled.value) return
+
+        await executeFillColumn('down')
+    }
+
+    // 执行填充整列
+    const executeFillColumn = async (direction: 'down' | 'up' = 'down'): Promise<boolean> => {
+        const { startCell, endCell } = selectionState.value
+        if (!startCell || !endCell || !tableRef.value) return false
+
+        const table = tableRef.value
+        const data = table.getData()
+        const columns = table.getColumns()
+        const bounds = getSelectionBounds()
+
+        if (!bounds) return false
+
+        // 获取源数据（选中区域的数据）
+        const sourceData: any[][] = []
+        for (let rowIdx = bounds.minRow; rowIdx <= bounds.maxRow; rowIdx++) {
+            const rowData = data[rowIdx]
+            if (!rowData) continue
+
+            const rowValues: any[] = []
+            for (let colIdx = bounds.minCol; colIdx <= bounds.maxCol; colIdx++) {
+                const column = columns[colIdx]
+                if (!column || isExcludedColumn(colIdx)) {
+                    rowValues.push(undefined)
+                    continue
+                }
+                rowValues.push(rowData[column.field])
+            }
+            sourceData.push(rowValues)
+        }
+
+        if (sourceData.length === 0) return false
+
+        // 计算填充区域
+        let fillMinRow: number
+        let fillMaxRow: number
+
+        if (direction === 'down') {
+            fillMinRow = bounds.maxRow + 1
+            fillMaxRow = data.length - 1
+        } else {
+            fillMinRow = 0
+            fillMaxRow = bounds.minRow - 1
+        }
+
+        // 如果没有可填充的行，直接返回
+        if (fillMinRow > fillMaxRow) {
+            showTooltip('没有可填充的行')
+            return false
+        }
+
+        const fillDataList: FillData[] = []
+
+        // 执行填充
+        for (let rowIdx = fillMinRow; rowIdx <= fillMaxRow; rowIdx++) {
+            const rowData = data[rowIdx]
+            if (!rowData) continue
+
+            for (let colIdx = bounds.minCol; colIdx <= bounds.maxCol; colIdx++) {
+                const column = columns[colIdx]
+                if (!column || isExcludedColumn(colIdx) || !isFillableColumn(colIdx)) continue
+
+                // 计算源数据索引（循环使用源数据）
+                const sourceRowIdx = (rowIdx - fillMinRow) % sourceData.length
+                const sourceColIdx = colIdx - bounds.minCol
+
+                const sourceValue = sourceData[sourceRowIdx]?.[sourceColIdx]
+                if (sourceValue === undefined) continue
+
+                const oldValue = rowData[column.field]
+
+                fillDataList.push({
+                    rowIndex: rowIdx,
+                    field: column.field,
+                    oldValue,
+                    newValue: sourceValue
+                })
+
+                // 更新数据
+                rowData[column.field] = sourceValue
+            }
+        }
+
+        if (fillDataList.length > 0) {
+            // 保存滚动位置
+            const scrollTop = table.getScroll()?.scrollTop || 0
+            const scrollLeft = table.getScroll()?.scrollLeft || 0
+
+            // 通知表格更新
+            await table.reloadData(data)
+
+            // 恢复滚动位置
+            nextTick(() => {
+                table.scrollTo(scrollLeft, scrollTop)
+            })
+
+            // 调用回调
+            onFillColumn?.(fillDataList)
+
+            const directionText = direction === 'down' ? '向下' : '向上'
+            showTooltip(`已${directionText}填充 ${fillDataList.length} 个单元格`)
+            return true
+        }
+
+        return false
     }
 
     // 填充拖拽中
@@ -1107,6 +1228,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         clearSelection,
         copyToClipboard,
         getSelectedText,
-        executePaste
+        executePaste,
+        executeFillColumn
     }
 }
