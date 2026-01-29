@@ -29,11 +29,19 @@ interface FillData {
     newValue: any
 }
 
+interface PasteData {
+    rowIndex: number
+    field: string
+    oldValue: any
+    newValue: any
+}
+
 interface UseTextSelectionOptions {
     tableRef: Ref<any>
     enabled?: Ref<boolean>
     onCopy?: (text: string) => void
     onFill?: (fillDataList: FillData[]) => void  // 填充回调
+    onPaste?: (pasteDataList: PasteData[]) => void  // 粘贴回调
     excludeColumns?: string[]  // 排除的列（如操作列）
     fillableColumns?: string[] // 可填充的列，不设置则所有非排除列都可填充
 }
@@ -44,6 +52,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         enabled = ref(true),
         onCopy,
         onFill,
+        onPaste,
         excludeColumns = ['operation', 'checkbox'],
         fillableColumns
     } = options
@@ -724,11 +733,140 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         clearSelection()
     }
 
-    // 键盘事件处理 - Ctrl+C 复制
+    // 解析剪贴板文本为二维数组
+    const parseClipboardText = (text: string): string[][] => {
+        if (!text) return []
+
+        // 按行分割，支持 \r\n 和 \n
+        const lines = text.split(/\r?\n/).filter(line => line.length > 0)
+
+        // 按制表符分割每行
+        return lines.map(line => line.split('\t'))
+    }
+
+    // 执行粘贴操作
+    const executePaste = async (): Promise<boolean> => {
+        const { startCell, endCell } = selectionState.value
+        if (!startCell || !endCell || !tableRef.value) return false
+
+        const table = tableRef.value
+        const data = table.getData()
+        const columns = table.getColumns()
+
+        // 读取剪贴板
+        let clipboardText = ''
+        try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                clipboardText = await navigator.clipboard.readText()
+            }
+        } catch (error) {
+            console.error('读取剪贴板失败:', error)
+            showTooltip('无法读取剪贴板，请检查浏览器权限')
+            return false
+        }
+
+        if (!clipboardText) {
+            showTooltip('剪贴板为空')
+            return false
+        }
+
+        // 解析剪贴板数据
+        const clipboardData = parseClipboardText(clipboardText)
+        if (clipboardData.length === 0) {
+            showTooltip('剪贴板数据为空')
+            return false
+        }
+
+        const bounds = getSelectionBounds()
+        if (!bounds) return false
+
+        const pasteDataList: PasteData[] = []
+
+        // 计算选中区域大小
+        const selectionRowCount = bounds.maxRow - bounds.minRow + 1
+        const selectionColCount = bounds.maxCol - bounds.minCol + 1
+
+        // 剪贴板数据大小
+        const clipboardRowCount = clipboardData.length
+        const clipboardColCount = Math.max(...clipboardData.map(row => row.length))
+
+        // 确定实际填充的范围
+        // 如果选中区域大于剪贴板数据，则循环填充
+        // 如果选中区域只有一个单元格，则按剪贴板数据大小填充
+        let fillRowCount: number
+        let fillColCount: number
+
+        if (selectionRowCount === 1 && selectionColCount === 1) {
+            // 只选中一个单元格，按剪贴板数据大小填充
+            fillRowCount = clipboardRowCount
+            fillColCount = clipboardColCount
+        } else {
+            // 选中多个单元格，在选中范围内循环填充
+            fillRowCount = selectionRowCount
+            fillColCount = selectionColCount
+        }
+
+        // 执行粘贴
+        for (let i = 0; i < fillRowCount; i++) {
+            const rowIdx = bounds.minRow + i
+            if (rowIdx >= data.length) break
+
+            const rowData = data[rowIdx]
+            if (!rowData) continue
+
+            // 计算源数据行索引（循环使用）
+            const sourceRowIdx = i % clipboardRowCount
+            const sourceRow = clipboardData[sourceRowIdx] || []
+
+            let actualColIdx = 0
+            for (let j = 0; j < fillColCount; j++) {
+                const colIdx = bounds.minCol + j
+                if (colIdx >= columns.length) break
+
+                const column = columns[colIdx]
+                if (!column || isExcludedColumn(colIdx) || !isFillableColumn(colIdx)) continue
+
+                // 计算源数据列索引（循环使用）
+                const sourceColIdx = actualColIdx % (sourceRow.length || 1)
+                const newValue = sourceRow[sourceColIdx]
+
+                if (newValue !== undefined) {
+                    const oldValue = rowData[column.field]
+
+                    pasteDataList.push({
+                        rowIndex: rowIdx,
+                        field: column.field,
+                        oldValue,
+                        newValue
+                    })
+
+                    // 更新数据
+                    rowData[column.field] = newValue
+                }
+
+                actualColIdx++
+            }
+        }
+
+        if (pasteDataList.length > 0) {
+            // 通知表格更新
+            table.reloadData(data)
+
+            // 调用回调
+            onPaste?.(pasteDataList)
+
+            showTooltip(`已粘贴 ${pasteDataList.length} 个单元格`)
+            return true
+        }
+
+        return false
+    }
+
+    // 键盘事件处理 - Ctrl+C 复制, Ctrl+V 粘贴
     const handleKeyDown = async (e: KeyboardEvent) => {
         if (!enabled.value) return
 
-        // Ctrl+C 或 Cmd+C
+        // Ctrl+C 或 Cmd+C - 复制
         if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
             const { startCell, endCell } = selectionState.value
 
@@ -750,6 +888,18 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
             const selection = window.getSelection()
             if (selection && selection.toString().trim()) {
                 // 使用浏览器默认复制行为
+                return
+            }
+        }
+
+        // Ctrl+V 或 Cmd+V - 粘贴
+        if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+            const { startCell, endCell } = selectionState.value
+
+            // 如果有选中区域，执行粘贴
+            if (startCell && endCell) {
+                e.preventDefault()
+                await executePaste()
                 return
             }
         }
@@ -938,6 +1088,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         fillState,
         clearSelection,
         copyToClipboard,
-        getSelectedText
+        getSelectedText,
+        executePaste
     }
 }
