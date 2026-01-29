@@ -345,6 +345,30 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         const style = document.createElement('style')
         style.id = styleId
         style.textContent = `
+      /* 全局禁用表格内文字选中的背景色 */
+      .vxe-table--body-wrapper,
+      .vxe-table--body-wrapper *,
+      .vxe-table--body,
+      .vxe-body--row,
+      .vxe-body--column,
+      .vxe-cell,
+      .vxe-cell--label {
+        user-select: none !important;
+        -webkit-user-select: none !important;
+      }
+      
+      .vxe-table--body-wrapper::selection,
+      .vxe-table--body-wrapper *::selection,
+      .vxe-body--row::selection,
+      .vxe-body--column::selection,
+      .vxe-cell::selection,
+      .vxe-cell *::selection,
+      .vxe-cell--label::selection {
+        background-color: transparent !important;
+        color: inherit !important;
+      }
+      
+      /* 选中单元格的边框效果 */
       .vxe-cell--text-selected {
         position: relative;
       }
@@ -359,12 +383,6 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         border: 2px solid #4285f4;
         pointer-events: none;
         box-sizing: border-box;
-      }
-      
-      /* 去除文字选中时的背景色 */
-      .vxe-cell--text-selected::selection,
-      .vxe-cell--text-selected *::selection {
-        background-color: transparent !important;
       }
       
       .copy-tooltip {
