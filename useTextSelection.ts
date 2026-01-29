@@ -1,4 +1,4 @@
-import { ref, Ref, onMounted, onUnmounted } from 'vue'
+import { ref, Ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { debounce } from 'lodash-es'
 
 interface SelectionState {
@@ -287,6 +287,27 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         selectionState.value.selectedText = getSelectedText()
     }
 
+    // 鼠标移出表格区域时清除选中
+    const handleMouseLeave = (e: MouseEvent) => {
+        if (!enabled.value) return
+        
+        const table = tableRef.value
+        if (!table) return
+
+        // 获取表格的 DOM 元素
+        const tableEl = table.$el as HTMLElement
+        if (!tableEl) return
+
+        // 检查鼠标是否真的离开了表格区域
+        const relatedTarget = e.relatedTarget as HTMLElement
+        if (relatedTarget && tableEl.contains(relatedTarget)) {
+            return // 鼠标仍在表格内部，不清除
+        }
+
+        // 清除选中状态
+        clearSelection()
+    }
+
     // 键盘事件处理 - Ctrl+C 复制
     const handleKeyDown = async (e: KeyboardEvent) => {
         if (!enabled.value) return
@@ -421,6 +442,24 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         document.head.appendChild(style)
     }
 
+    // 绑定表格的 mouseleave 事件
+    const bindTableMouseLeave = () => {
+        const table = tableRef.value
+        if (!table || !table.$el) return
+
+        const tableEl = table.$el as HTMLElement
+        tableEl.addEventListener('mouseleave', handleMouseLeave)
+    }
+
+    // 解绑表格的 mouseleave 事件
+    const unbindTableMouseLeave = () => {
+        const table = tableRef.value
+        if (!table || !table.$el) return
+
+        const tableEl = table.$el as HTMLElement
+        tableEl.removeEventListener('mouseleave', handleMouseLeave)
+    }
+
     // 初始化
     onMounted(() => {
         addStyles()
@@ -430,6 +469,11 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         document.addEventListener('mouseup', handleMouseUp)
         document.addEventListener('keydown', handleKeyDown)
         document.addEventListener('contextmenu', handleContextMenu)
+
+        // 延迟绑定，确保 tableRef 已经准备好
+        nextTick(() => {
+            bindTableMouseLeave()
+        })
     })
 
     // 清理
@@ -440,6 +484,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         document.removeEventListener('keydown', handleKeyDown)
         document.removeEventListener('contextmenu', handleContextMenu)
 
+        unbindTableMouseLeave()
         clearSelection()
     })
 
