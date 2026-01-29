@@ -1,4 +1,4 @@
-import { ref, Ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, Ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { debounce } from 'lodash-es'
 
 interface SelectionState {
@@ -6,6 +6,12 @@ interface SelectionState {
     startCell: CellInfo | null
     endCell: CellInfo | null
     selectedText: string
+}
+
+interface FillState {
+    isFilling: boolean
+    fillDirection: 'down' | 'up' | 'right' | 'left' | null
+    fillEndCell: CellInfo | null
 }
 
 // 修改：使用更完整的单元格信息
@@ -16,15 +22,31 @@ interface CellInfo {
     colId: string         // vxe-table 的 colid (用于 DOM 查询)
 }
 
+interface FillData {
+    rowIndex: number
+    field: string
+    oldValue: any
+    newValue: any
+}
+
 interface UseTextSelectionOptions {
     tableRef: Ref<any>
     enabled?: Ref<boolean>
     onCopy?: (text: string) => void
+    onFill?: (fillDataList: FillData[]) => void  // 填充回调
     excludeColumns?: string[]  // 排除的列（如操作列）
+    fillableColumns?: string[] // 可填充的列，不设置则所有非排除列都可填充
 }
 
 export const useTextSelection = (options: UseTextSelectionOptions) => {
-    const { tableRef, enabled = ref(true), onCopy, excludeColumns = ['operation', 'checkbox'] } = options
+    const {
+        tableRef,
+        enabled = ref(true),
+        onCopy,
+        onFill,
+        excludeColumns = ['operation', 'checkbox'],
+        fillableColumns
+    } = options
 
     const selectionState = ref<SelectionState>({
         isSelecting: false,
@@ -32,6 +54,15 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         endCell: null,
         selectedText: ''
     })
+
+    const fillState = ref<FillState>({
+        isFilling: false,
+        fillDirection: null,
+        fillEndCell: null
+    })
+
+    // 填充柄元素
+    let fillHandle: HTMLElement | null = null
 
     // 缓存列信息，避免频繁获取
     let cachedColumns: any[] = []
@@ -87,6 +118,26 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         return excludeColumns.includes(column.field) ||
             column.type === 'checkbox' ||
             column.type === 'seq'
+    }
+
+    // 检查列是否可填充
+    const isFillableColumn = (colIndex: number): boolean => {
+        if (isExcludedColumn(colIndex)) return false
+
+        const table = tableRef.value
+        if (!table) return false
+
+        const columns = cachedColumns.length ? cachedColumns : table.getColumns()
+        const column = columns[colIndex]
+
+        if (!column) return false
+
+        // 如果指定了可填充列，则只有这些列可以填充
+        if (fillableColumns && fillableColumns.length > 0) {
+            return fillableColumns.includes(column.field)
+        }
+
+        return true
     }
 
     // 获取选中区域的文本内容 - 使用实际数据索引
@@ -157,11 +208,11 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         }
     }
 
-    // 显示复制成功提示
-    const showCopyTooltip = (text: string) => {
+    // 显示提示
+    const showTooltip = (message: string) => {
         const tooltip = document.createElement('div')
         tooltip.className = 'copy-tooltip'
-        tooltip.textContent = `已复制 ${text.split('\n').length} 行数据`
+        tooltip.textContent = message
         tooltip.style.left = `${window.innerWidth / 2}px`
         tooltip.style.top = `${window.innerHeight / 2}px`
         tooltip.style.transform = 'translate(-50%, -50%)'
@@ -170,6 +221,348 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         setTimeout(() => {
             tooltip.remove()
         }, 1500)
+    }
+
+    // 显示复制成功提示
+    const showCopyTooltip = (text: string) => {
+        showTooltip(`已复制 ${text.split('\n').length} 行数据`)
+    }
+
+    // 获取选中区域的边界
+    const getSelectionBounds = () => {
+        const { startCell, endCell } = selectionState.value
+        if (!startCell || !endCell) return null
+
+        return {
+            minRow: Math.min(startCell.rowIndex, endCell.rowIndex),
+            maxRow: Math.max(startCell.rowIndex, endCell.rowIndex),
+            minCol: Math.min(startCell.colIndex, endCell.colIndex),
+            maxCol: Math.max(startCell.colIndex, endCell.colIndex)
+        }
+    }
+
+    // 创建填充柄
+    const createFillHandle = () => {
+        if (fillHandle) return
+
+        fillHandle = document.createElement('div')
+        fillHandle.className = 'vxe-fill-handle'
+        fillHandle.style.cssText = `
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: #4285f4;
+            border: 1px solid #fff;
+            cursor: crosshair;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        `
+        document.body.appendChild(fillHandle)
+
+        // 填充柄的鼠标事件
+        fillHandle.addEventListener('mousedown', handleFillHandleMouseDown)
+    }
+
+    // 更新填充柄位置
+    const updateFillHandlePosition = () => {
+        if (!fillHandle) return
+
+        const { startCell, endCell } = selectionState.value
+        if (!startCell || !endCell || !tableRef.value) {
+            fillHandle.style.display = 'none'
+            return
+        }
+
+        const table = tableRef.value
+        const data = table.getData()
+        const columns = table.getColumns()
+
+        const bounds = getSelectionBounds()
+        if (!bounds) {
+            fillHandle.style.display = 'none'
+            return
+        }
+
+        // 找到右下角单元格
+        const bottomRightRowData = data[bounds.maxRow]
+        if (!bottomRightRowData) {
+            fillHandle.style.display = 'none'
+            return
+        }
+
+        const bottomRightRowId = table.getRowid(bottomRightRowData)
+        const bottomRightColumn = columns[bounds.maxCol]
+        if (!bottomRightColumn) {
+            fillHandle.style.display = 'none'
+            return
+        }
+
+        const cellSelector = `.vxe-body--row[rowid="${bottomRightRowId}"] .vxe-body--column[colid="${bottomRightColumn.id}"]`
+        const cell = document.querySelector(cellSelector) as HTMLElement
+
+        if (!cell) {
+            fillHandle.style.display = 'none'
+            return
+        }
+
+        const rect = cell.getBoundingClientRect()
+        fillHandle.style.display = 'block'
+        fillHandle.style.left = `${rect.right - 4}px`
+        fillHandle.style.top = `${rect.bottom - 4}px`
+    }
+
+    // 移除填充柄
+    const removeFillHandle = () => {
+        if (fillHandle) {
+            fillHandle.removeEventListener('mousedown', handleFillHandleMouseDown)
+            fillHandle.remove()
+            fillHandle = null
+        }
+    }
+
+    // 填充柄拖拽开始
+    const handleFillHandleMouseDown = (e: MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        if (!enabled.value) return
+
+        fillState.value = {
+            isFilling: true,
+            fillDirection: null,
+            fillEndCell: null
+        }
+
+        document.addEventListener('mousemove', handleFillMouseMove)
+        document.addEventListener('mouseup', handleFillMouseUp)
+    }
+
+    // 填充拖拽中
+    const handleFillMouseMove = (e: MouseEvent) => {
+        if (!fillState.value.isFilling || !enabled.value) return
+
+        const target = e.target as HTMLElement
+        const cell = target.closest('.vxe-body--column') as HTMLElement
+
+        if (!cell) return
+
+        const position = getCellPosition(cell)
+        if (!position) return
+
+        const bounds = getSelectionBounds()
+        if (!bounds) return
+
+        // 判断填充方向
+        let direction: 'down' | 'up' | 'right' | 'left' | null = null
+
+        if (position.rowIndex > bounds.maxRow && position.colIndex >= bounds.minCol && position.colIndex <= bounds.maxCol) {
+            direction = 'down'
+        } else if (position.rowIndex < bounds.minRow && position.colIndex >= bounds.minCol && position.colIndex <= bounds.maxCol) {
+            direction = 'up'
+        } else if (position.colIndex > bounds.maxCol && position.rowIndex >= bounds.minRow && position.rowIndex <= bounds.maxRow) {
+            direction = 'right'
+        } else if (position.colIndex < bounds.minCol && position.rowIndex >= bounds.minRow && position.rowIndex <= bounds.maxRow) {
+            direction = 'left'
+        }
+
+        if (direction) {
+            fillState.value.fillDirection = direction
+            fillState.value.fillEndCell = position
+            updateFillPreview()
+        }
+    }
+
+    // 填充拖拽结束
+    const handleFillMouseUp = () => {
+        document.removeEventListener('mousemove', handleFillMouseMove)
+        document.removeEventListener('mouseup', handleFillMouseUp)
+
+        if (fillState.value.isFilling && fillState.value.fillEndCell && fillState.value.fillDirection) {
+            executeFill()
+        }
+
+        // 清除填充预览
+        clearFillPreview()
+
+        fillState.value = {
+            isFilling: false,
+            fillDirection: null,
+            fillEndCell: null
+        }
+    }
+
+    // 更新填充预览
+    const updateFillPreview = () => {
+        clearFillPreview()
+
+        const { fillEndCell, fillDirection } = fillState.value
+        if (!fillEndCell || !fillDirection || !tableRef.value) return
+
+        const table = tableRef.value
+        const data = table.getData()
+        const columns = table.getColumns()
+        const bounds = getSelectionBounds()
+
+        if (!bounds) return
+
+        let fillMinRow = bounds.minRow
+        let fillMaxRow = bounds.maxRow
+        let fillMinCol = bounds.minCol
+        let fillMaxCol = bounds.maxCol
+
+        // 根据方向计算填充区域
+        switch (fillDirection) {
+            case 'down':
+                fillMinRow = bounds.maxRow + 1
+                fillMaxRow = fillEndCell.rowIndex
+                break
+            case 'up':
+                fillMinRow = fillEndCell.rowIndex
+                fillMaxRow = bounds.minRow - 1
+                break
+            case 'right':
+                fillMinCol = bounds.maxCol + 1
+                fillMaxCol = fillEndCell.colIndex
+                break
+            case 'left':
+                fillMinCol = fillEndCell.colIndex
+                fillMaxCol = bounds.minCol - 1
+                break
+        }
+
+        // 高亮填充预览区域
+        for (let rowIdx = fillMinRow; rowIdx <= fillMaxRow; rowIdx++) {
+            const rowData = data[rowIdx]
+            if (!rowData) continue
+
+            const rowId = table.getRowid(rowData)
+
+            for (let colIdx = fillMinCol; colIdx <= fillMaxCol; colIdx++) {
+                const column = columns[colIdx]
+                if (!column || isExcludedColumn(colIdx)) continue
+
+                const cellSelector = `.vxe-body--row[rowid="${rowId}"] .vxe-body--column[colid="${column.id}"] .vxe-cell`
+                const cell = document.querySelector(cellSelector)
+                if (cell) {
+                    cell.classList.add('vxe-cell--fill-preview')
+                }
+            }
+        }
+    }
+
+    // 清除填充预览
+    const clearFillPreview = () => {
+        document.querySelectorAll('.vxe-cell--fill-preview').forEach(el => {
+            el.classList.remove('vxe-cell--fill-preview')
+        })
+    }
+
+    // 执行填充
+    const executeFill = () => {
+        const { fillEndCell, fillDirection } = fillState.value
+        if (!fillEndCell || !fillDirection || !tableRef.value) return
+
+        const table = tableRef.value
+        const data = table.getData()
+        const columns = table.getColumns()
+        const bounds = getSelectionBounds()
+
+        if (!bounds) return
+
+        // 获取源数据（选中区域的数据）
+        const sourceData: any[][] = []
+        for (let rowIdx = bounds.minRow; rowIdx <= bounds.maxRow; rowIdx++) {
+            const rowData = data[rowIdx]
+            if (!rowData) continue
+
+            const rowValues: any[] = []
+            for (let colIdx = bounds.minCol; colIdx <= bounds.maxCol; colIdx++) {
+                const column = columns[colIdx]
+                if (!column || isExcludedColumn(colIdx)) {
+                    rowValues.push(undefined)
+                    continue
+                }
+                rowValues.push(rowData[column.field])
+            }
+            sourceData.push(rowValues)
+        }
+
+        if (sourceData.length === 0) return
+
+        // 计算填充区域
+        let fillMinRow = bounds.minRow
+        let fillMaxRow = bounds.maxRow
+        let fillMinCol = bounds.minCol
+        let fillMaxCol = bounds.maxCol
+
+        switch (fillDirection) {
+            case 'down':
+                fillMinRow = bounds.maxRow + 1
+                fillMaxRow = fillEndCell.rowIndex
+                break
+            case 'up':
+                fillMinRow = fillEndCell.rowIndex
+                fillMaxRow = bounds.minRow - 1
+                break
+            case 'right':
+                fillMinCol = bounds.maxCol + 1
+                fillMaxCol = fillEndCell.colIndex
+                break
+            case 'left':
+                fillMinCol = fillEndCell.colIndex
+                fillMaxCol = bounds.minCol - 1
+                break
+        }
+
+        const fillDataList: FillData[] = []
+
+        // 执行填充
+        for (let rowIdx = fillMinRow; rowIdx <= fillMaxRow; rowIdx++) {
+            const rowData = data[rowIdx]
+            if (!rowData) continue
+
+            for (let colIdx = fillMinCol; colIdx <= fillMaxCol; colIdx++) {
+                const column = columns[colIdx]
+                if (!column || isExcludedColumn(colIdx) || !isFillableColumn(colIdx)) continue
+
+                // 计算源数据索引（循环使用源数据）
+                let sourceRowIdx: number
+                let sourceColIdx: number
+
+                if (fillDirection === 'down' || fillDirection === 'up') {
+                    sourceRowIdx = (rowIdx - fillMinRow) % sourceData.length
+                    sourceColIdx = colIdx - bounds.minCol
+                } else {
+                    sourceRowIdx = rowIdx - bounds.minRow
+                    sourceColIdx = (colIdx - fillMinCol) % (bounds.maxCol - bounds.minCol + 1)
+                }
+
+                const sourceValue = sourceData[sourceRowIdx]?.[sourceColIdx]
+                if (sourceValue === undefined) continue
+
+                const oldValue = rowData[column.field]
+
+                fillDataList.push({
+                    rowIndex: rowIdx,
+                    field: column.field,
+                    oldValue,
+                    newValue: sourceValue
+                })
+
+                // 更新数据
+                rowData[column.field] = sourceValue
+            }
+        }
+
+        if (fillDataList.length > 0) {
+            // 通知表格更新
+            table.reloadData(data)
+
+            // 调用回调
+            onFill?.(fillDataList)
+
+            showTooltip(`已填充 ${fillDataList.length} 个单元格`)
+        }
     }
 
     // 更新选择区域的视觉效果 - 优化版本
@@ -181,7 +574,10 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
             el.classList.remove('vxe-cell--text-selected')
         })
 
-        if (!startCell || !endCell || !tableRef.value) return
+        if (!startCell || !endCell || !tableRef.value) {
+            if (fillHandle) fillHandle.style.display = 'none'
+            return
+        }
 
         const table = tableRef.value
         const data = table.getData()
@@ -212,6 +608,11 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
                 }
             }
         }
+
+        // 更新填充柄位置
+        nextTick(() => {
+            updateFillHandlePosition()
+        })
     }
 
     // 防抖版本的视觉更新，用于 mousemove
@@ -229,11 +630,20 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         document.querySelectorAll('.vxe-cell--text-selected').forEach(el => {
             el.classList.remove('vxe-cell--text-selected')
         })
+
+        if (fillHandle) {
+            fillHandle.style.display = 'none'
+        }
+
+        clearFillPreview()
     }
 
     // 鼠标事件处理
     const handleMouseDown = (e: MouseEvent) => {
         if (!enabled.value) return
+
+        // 如果点击的是填充柄，不处理
+        if (e.target === fillHandle) return
 
         const target = e.target as HTMLElement
         const cell = target.closest('.vxe-body--column') as HTMLElement
@@ -290,7 +700,10 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
     // 鼠标移出表格区域时清除选中
     const handleMouseLeave = (e: MouseEvent) => {
         if (!enabled.value) return
-        
+
+        // 如果正在填充，不清除
+        if (fillState.value.isFilling) return
+
         const table = tableRef.value
         if (!table) return
 
@@ -303,6 +716,9 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         if (relatedTarget && tableEl.contains(relatedTarget)) {
             return // 鼠标仍在表格内部，不清除
         }
+
+        // 检查是否移动到了填充柄
+        if (relatedTarget === fillHandle) return
 
         // 清除选中状态
         clearSelection()
@@ -407,6 +823,33 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         box-sizing: border-box;
       }
       
+      /* 填充预览样式 */
+      .vxe-cell--fill-preview {
+        position: relative;
+        background-color: rgba(66, 133, 244, 0.08) !important;
+      }
+      
+      .vxe-cell--fill-preview::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border: 2px dashed #4285f4;
+        pointer-events: none;
+        box-sizing: border-box;
+      }
+      
+      /* 填充柄样式 */
+      .vxe-fill-handle {
+        transition: transform 0.1s ease;
+      }
+      
+      .vxe-fill-handle:hover {
+        transform: scale(1.3);
+      }
+      
       .copy-tooltip {
         position: fixed;
         background-color: #333;
@@ -463,6 +906,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
     // 初始化
     onMounted(() => {
         addStyles()
+        createFillHandle()
 
         document.addEventListener('mousedown', handleMouseDown)
         document.addEventListener('mousemove', handleMouseMove)
@@ -485,11 +929,13 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         document.removeEventListener('contextmenu', handleContextMenu)
 
         unbindTableMouseLeave()
+        removeFillHandle()
         clearSelection()
     })
 
     return {
         selectionState,
+        fillState,
         clearSelection,
         copyToClipboard,
         getSelectedText
