@@ -346,7 +346,6 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         style.id = styleId
         style.textContent = `
       .vxe-cell--text-selected {
-        background-color: #b4d7ff !important;
         position: relative;
       }
       
@@ -357,8 +356,15 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         left: 0;
         right: 0;
         bottom: 0;
-        border: 1px solid #4285f4;
+        border: 2px solid #4285f4;
         pointer-events: none;
+        box-sizing: border-box;
+      }
+      
+      /* 去除文字选中时的背景色 */
+      .vxe-cell--text-selected::selection,
+      .vxe-cell--text-selected *::selection {
+        background-color: transparent !important;
       }
       
       .copy-tooltip {
