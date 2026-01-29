@@ -1,5 +1,5 @@
 <template>
-    <card-body ref="bodyRef">
+    <div class="card" ref="bodyRef">
         <h1 class="card_title_h1">Avatar 头像</h1>
         <el-text class="mx-1" size="large">Avatar 组件可以用来代表人物或对象，支持使用图片、图标或者文字作为 Avatar。</el-text>
 
@@ -144,7 +144,7 @@
             <el-table-column prop="name" label="插槽名" width="180" />
             <el-table-column prop="desc" label="说明" min-width="280" />
         </el-table>
-    </card-body>
+    </div>
 </template>
 
 <script lang="tsx">
@@ -358,18 +358,6 @@ const avatarSlotData: any[] = [
     .demo-fit-label {
         color: #606266;
         font-size: 14px;
-    }
-}
-
-.code-icon {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.3s;
-
-    &:hover {
-        opacity: 1;
     }
 }
 </style>

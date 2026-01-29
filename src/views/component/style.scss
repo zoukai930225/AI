@@ -1,29 +1,95 @@
-// 组件文档页面共享样式
+.card {
+    height: 100%;
 
-.card_title_h1 {
-    font-size: 28px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: #1d2129;
-}
+    .card_title {
+        margin-bottom: 10px;
+        display: inline-block;
+        width: 100%;
+        font-weight: 600;
+    }
 
-.card_title_h2 {
-    font-size: 22px;
-    font-weight: 600;
-    margin-top: 40px;
-    margin-bottom: 16px;
-    color: #1d2129;
-}
+    .card_img {
+        width: 600px;
+        margin-bottom: 10px;
+    }
 
-.card_title_h3 {
-    font-size: 18px;
-    font-weight: 600;
-    margin-top: 24px;
-    margin-bottom: 12px;
-    color: #1d2129;
-}
+    .code {
+        background-color: #f4f4f4;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        display: inline-block;
+        max-width: 100%;
+        white-space: pre-wrap;
+        margin-bottom: 10px;
+    }
 
-.mx-1 {
-    margin-left: 4px;
-    margin-right: 4px;
+    .card_title_h1 {
+        font-weight: 600;
+        font-size: 1.6rem;
+        margin-bottom: 1.65rem;
+        margin-top: 1rem;
+    }
+
+    .card_title_h2 {
+        margin-top: 1.55rem;
+        margin-bottom: 1.25rem;
+        padding-bottom: .3rem;
+        line-height: 1.25;
+        font-size: 1.35rem;
+    }
+
+    .card_title_h3 {
+        margin-top: 1.35rem;
+        margin-bottom: 1.15rem;
+        padding-bottom: .3rem;
+        line-height: 1.2;
+        font-size: 1.15rem;
+    }
+
+    :deep() {
+        .el-collapse {
+            border-bottom: none;
+            border-top: none;
+        }
+
+        .el-collapse-item__wrap,
+        .el-collapse-item__header {
+            border-bottom: none;
+        }
+
+        .el-card__footer {
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+    }
+
+    .grid-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 4fr));
+        grid-gap: 20px;
+    }
+
+    .grid-row2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(492px, 3fr));
+        grid-gap: 20px;
+    }
+
+    .code-icon {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    .short-text {
+        line-height: 28px;
+    }
+
+    .type-box {
+        display: flex;
+        align-items: center;
+        flex-direction: row;
+    }
+
 }
