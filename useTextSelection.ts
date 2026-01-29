@@ -368,9 +368,10 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         color: inherit !important;
       }
       
-      /* 选中单元格的边框效果 */
+      /* 选中单元格的背景色和边框效果 */
       .vxe-cell--text-selected {
         position: relative;
+        background-color: rgba(66, 133, 244, 0.15) !important;
       }
       
       .vxe-cell--text-selected::after {
