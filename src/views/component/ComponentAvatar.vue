@@ -310,34 +310,7 @@ const avatarSlotData: any[] = [
 </script>
 
 <style lang="scss" scoped>
-// 标题样式
-.card_title_h1 {
-    font-size: 28px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: #1d2129;
-}
-
-.card_title_h2 {
-    font-size: 22px;
-    font-weight: 600;
-    margin-top: 40px;
-    margin-bottom: 16px;
-    color: #1d2129;
-}
-
-.card_title_h3 {
-    font-size: 18px;
-    font-weight: 600;
-    margin-top: 24px;
-    margin-bottom: 12px;
-    color: #1d2129;
-}
-
-.mx-1 {
-    margin-left: 4px;
-    margin-right: 4px;
-}
+@use '../style.scss' as *;
 
 .demo-block {
     padding: 16px 0;
