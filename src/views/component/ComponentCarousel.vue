@@ -1,5 +1,5 @@
 <template>
-    <div class="card" ref="bodyRef">
+    <card-body ref="bodyRef">
         <h1 class="card_title_h1">Carousel 走马灯</h1>
         <el-text class="mx-1" size="large">在有限空间内，循环播放同一类型的图片、文字等内容。</el-text>
 
@@ -166,7 +166,7 @@
             <el-table-column prop="name" label="插槽名" width="180" />
             <el-table-column prop="desc" label="说明" min-width="280" />
         </el-table>
-    </div>
+    </card-body>
 </template>
 
 <script lang="tsx">

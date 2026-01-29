@@ -1,5 +1,5 @@
 <template>
-    <div class="card" ref="bodyRef">
+    <card-body ref="bodyRef">
         <h1 class="card_title_h1">Badge 徽章</h1>
         <el-text class="mx-1" size="large">按钮和图标上的数字或状态标记。</el-text>
 
@@ -160,7 +160,7 @@
             <el-table-column prop="name" label="插槽名" width="180" />
             <el-table-column prop="desc" label="说明" min-width="280" />
         </el-table>
-    </div>
+    </card-body>
 </template>
 
 <script lang="tsx">
