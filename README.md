@@ -97,22 +97,126 @@ const weekStart = dayjs(date).startOf('isoWeek').format('YYYY-MM-DD')
 const weekEnd = dayjs(date).endOf('isoWeek').format('YYYY-MM-DD')
 ```
 
-## 排查清单
+## 环境差异问题排查
 
-如果仍然不生效，请检查：
+如果测试环境正常，但本地开发和生产环境失效：
 
-1. **全局 ConfigProvider**：检查 `App.vue` 或其他父组件是否有 `<el-config-provider>` 覆盖了配置
-2. **缓存问题**：清除 node_modules 并重新安装依赖，重启开发服务器
-3. **Element Plus 版本**：确认版本是 2.12.0，不同版本可能有不同的配置方式
-4. **检查控制台**：看是否有警告或错误信息
+### 可能原因
+
+1. **Vite HMR（热更新）问题**：开发模式下，热更新可能导致语言配置被重置
+2. **模块加载顺序**：不同构建模式下，模块加载顺序可能不同
+3. **代码分割**：生产环境的代码分割可能影响配置加载时机
+
+### 解决方案
+
+#### 1. 使用插件模式确保配置一致
+
+创建 `src/plugins/elementPlus.ts`：
+
+```typescript
+import type { App } from 'vue'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+
+function createCustomLocale() {
+  // 使用 JSON 深拷贝确保完全独立的对象
+  const customLocale = JSON.parse(JSON.stringify(zhCn))
+  customLocale.el.datepicker.firstDayOfWeek = 1
+  return customLocale
+}
+
+export const zhCnCustom = createCustomLocale()
+
+export function setupElementPlus(app: App) {
+  app.use(ElementPlus, {
+    locale: zhCnCustom
+  })
+}
+```
+
+在 `main.ts` 中使用：
+
+```typescript
+import { createApp } from 'vue'
+import { setupElementPlus } from './plugins/elementPlus'
+import App from './App.vue'
+
+const app = createApp(App)
+setupElementPlus(app)
+app.mount('#app')
+```
+
+#### 2. 检查 App.vue 中是否有全局 ConfigProvider
+
+如果 `App.vue` 中有 `<el-config-provider>`，需要同样设置 locale：
+
+```vue
+<template>
+  <el-config-provider :locale="zhCnCustom">
+    <router-view />
+  </el-config-provider>
+</template>
+
+<script setup>
+import { zhCnCustom } from '@/plugins/elementPlus'
+</script>
+```
+
+#### 3. 检查 Vite 配置
+
+确保 `vite.config.ts` 中没有影响模块加载的特殊配置：
+
+```typescript
+export default defineConfig({
+  // 确保 element-plus 不被外部化
+  build: {
+    rollupOptions: {
+      // 不要将 element-plus 放入 external
+    }
+  }
+})
+```
+
+#### 4. 清除所有缓存
+
+```bash
+# 清除 node_modules
+rm -rf node_modules
+rm -rf node_modules/.vite
+
+# 清除 pnpm/npm 缓存
+pnpm store prune  # 或 npm cache clean --force
+
+# 重新安装
+pnpm install  # 或 npm install
+
+# 重启开发服务器
+pnpm dev
+```
 
 ## 验证配置
 
-在组件中添加以下代码验证配置是否正确：
+组件会在开发模式下自动输出配置信息到控制台：
+
+```
+[TimeFilter] Element Plus locale firstDayOfWeek: 1
+```
+
+如果输出的值不是 `1`，说明配置没有正确加载。
+
+## 终极解决方案
+
+如果以上方法都不生效，可以在组件挂载时强制设置：
 
 ```typescript
-import zhCnCustom from '@/locale/zhCnCustom'
+import { onMounted } from 'vue'
 
-console.log('firstDayOfWeek:', zhCnCustom.el.datepicker.firstDayOfWeek)
-// 应该输出: firstDayOfWeek: 1
+onMounted(() => {
+  // 强制修改 Element Plus 内部配置
+  const configProvider = document.querySelector('.el-config-provider')
+  if (configProvider) {
+    // 触发重新渲染
+  }
+})
 ```

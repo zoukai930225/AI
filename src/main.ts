@@ -1,15 +1,10 @@
 import { createApp } from 'vue'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-// 使用自定义中文语言配置（强制周一为第一天）
-import zhCnCustom from './locale/zhCnCustom'
+import { setupElementPlus } from './plugins/elementPlus'
 import App from './App.vue'
 
 const app = createApp(App)
 
-// 配置 Element Plus，设置自定义中文语言环境
-app.use(ElementPlus, {
-  locale: zhCnCustom
-})
+// 使用 Element Plus 配置插件（包含自定义语言配置）
+setupElementPlus(app)
 
 app.mount('#app')

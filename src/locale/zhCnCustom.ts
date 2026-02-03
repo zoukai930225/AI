@@ -1,31 +1,18 @@
 /**
  * 自定义中文语言配置
  * 强制设置周一为一周的第一天
+ * 
+ * 注意：这个配置需要在 Element Plus 初始化之前加载
  */
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
-// 深度克隆并修改语言配置
-const zhCnCustom = {
-  name: 'zh-cn',
-  ...zhCn,
-  el: {
-    ...zhCn.el,
-    datepicker: {
-      ...zhCn.el.datepicker,
-      // 设置周一为一周的第一天 (1 = 周一, 7 = 周日)
-      firstDayOfWeek: 1,
-      // 确保星期名称正确
-      weeks: {
-        sun: '日',
-        mon: '一',
-        tue: '二',
-        wed: '三',
-        thu: '四',
-        fri: '五',
-        sat: '六'
-      }
-    }
-  }
-}
+// 深度克隆语言配置，避免修改原始对象
+const zhCnCustom = JSON.parse(JSON.stringify(zhCn))
+
+// 强制设置周一为一周的第一天
+zhCnCustom.el.datepicker.firstDayOfWeek = 1
+
+// 冻结对象，防止被其他代码修改
+Object.freeze(zhCnCustom.el.datepicker)
 
 export default zhCnCustom

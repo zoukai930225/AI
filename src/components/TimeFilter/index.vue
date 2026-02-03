@@ -50,7 +50,7 @@ import 'dayjs/locale/zh-cn'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import updateLocale from 'dayjs/plugin/updateLocale'
 // 引入自定义中文语言配置（强制周一为第一天）
-import zhCnCustom from '@/locale/zhCnCustom'
+import { zhCnCustom } from '@/plugins/elementPlus'
 
 // 扩展 dayjs 插件
 dayjs.extend(isoWeek)
@@ -63,6 +63,11 @@ dayjs.locale('zh-cn')
 dayjs.updateLocale('zh-cn', {
   weekStart: 1 // 周一为一周的第一天
 })
+
+// 开发环境下验证配置
+if (import.meta.env.DEV) {
+  console.log('[TimeFilter] Element Plus locale firstDayOfWeek:', zhCnCustom?.el?.datepicker?.firstDayOfWeek)
+}
 
 const message = useMessage()
 
