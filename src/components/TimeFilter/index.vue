@@ -11,8 +11,8 @@
           <div v-if="value?.isComponents && selectValue.index === index"
             :style="{ width: `${value.label?.length === 1 ? '115' : '200'}px` }"
             class="topDateFilter-bg-timeSelect-date">
-            <!-- 使用 el-config-provider 包裹确保语言环境正确应用 -->
-            <el-config-provider :locale="zhCn">
+            <!-- 使用 el-config-provider 包裹，传入自定义语言配置确保周一为第一天 -->
+            <el-config-provider :locale="customZhCn">
               <el-date-picker ref="dateRef" @change="dateChange" v-model="dateValue" :value-format="value.format"
                 :type="value.componentType" @calendar-change="calendarChange"
                 :disabled-date="(time) => disabledDate(time, value)" />
@@ -63,6 +63,29 @@ dayjs.locale('zh-cn')
 dayjs.updateLocale('zh-cn', {
   weekStart: 1 // 周一为一周的第一天
 })
+
+// 创建自定义语言配置，强制设置周一为一周的第一天
+const customZhCn = {
+  ...zhCn,
+  el: {
+    ...zhCn.el,
+    datepicker: {
+      ...zhCn.el.datepicker,
+      // 重新排列星期显示顺序：周一到周日
+      weeks: {
+        sun: '日',
+        mon: '一',
+        tue: '二',
+        wed: '三',
+        thu: '四',
+        fri: '五',
+        sat: '六'
+      },
+      // Element Plus 内部使用这个属性来确定一周的第一天
+      firstDayOfWeek: 1
+    }
+  }
+}
 
 const message = useMessage()
 
