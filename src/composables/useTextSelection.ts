@@ -263,6 +263,19 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         return handle
     }
 
+    // 检查选中区域是否包含可填充的列
+    const hasAnyFillableColumn = (): boolean => {
+        const bounds = getSelectionBounds()
+        if (!bounds) return false
+
+        for (let colIdx = bounds.minCol; colIdx <= bounds.maxCol; colIdx++) {
+            if (isFillableColumn(colIdx)) {
+                return true
+            }
+        }
+        return false
+    }
+
     // 更新填充柄位置 - 将填充柄添加到右下角单元格内部
     const updateFillHandlePosition = () => {
         // 先移除现有的填充柄
@@ -270,6 +283,11 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
 
         const { startCell, endCell } = selectionState.value
         if (!startCell || !endCell || !tableRef.value) {
+            return
+        }
+
+        // 检查选中区域是否有可填充的列，没有则不显示填充柄
+        if (!hasAnyFillableColumn()) {
             return
         }
 
