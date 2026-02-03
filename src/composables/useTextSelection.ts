@@ -1027,10 +1027,10 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
       /* 填充柄样式 - 相对于单元格定位 */
       .vxe-fill-handle {
         position: absolute;
-        right: -5px;
-        bottom: -5px;
-        width: 10px;
-        height: 10px;
+        right: -6px;
+        bottom: -6px;
+        width: 12px;
+        height: 12px;
         background-color: #4285f4;
         border: 2px solid #fff;
         border-radius: 2px;
@@ -1041,8 +1041,8 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
       }
       
       .vxe-fill-handle:hover {
-        transform: scale(1.4);
-        box-shadow: 0 2px 6px rgba(66, 133, 244, 0.5);
+        transform: scale(3);
+        box-shadow: 0 2px 8px rgba(66, 133, 244, 0.6);
       }
       
       .copy-tooltip {
