@@ -1,14 +1,16 @@
 # TimeFilter 组件
 
-## dayjs 周一为一周第一天的修复
+## 问题描述
 
-### 问题描述
+1. **dayjs 问题**：使用 `dayjs.locale('zh-cn')` 设置中文语言环境后，`startOf('week')` 和 `endOf('week')` 方法仍然以周日作为一周的第一天。
 
-在使用 `dayjs.locale('zh-cn')` 设置中文语言环境后，`startOf('week')` 和 `endOf('week')` 方法仍然以周日作为一周的第一天，而不是周一。
+2. **Element Plus 日期选择器问题**：日历显示周日（日）在第一列，而不是周一（一）。
 
-### 解决方案
+## 解决方案
 
-需要使用 `isoWeek` 插件和 `updateLocale` 插件来正确设置周一为一周的第一天：
+### 1. dayjs 配置
+
+需要使用 `isoWeek` 插件来正确计算周的开始和结束：
 
 ```typescript
 import dayjs from 'dayjs'
@@ -29,9 +31,7 @@ dayjs.updateLocale('zh-cn', {
 })
 ```
 
-### 关键修改
-
-在 `buildBackValue` 函数中，将 `startOf('week')` 和 `endOf('week')` 改为使用 `isoWeek` 插件的方法：
+在计算周的范围时，使用 `isoWeek`：
 
 ```typescript
 case '周':
@@ -43,28 +43,73 @@ case '周':
   break
 ```
 
-### 为什么 `dayjs.locale('zh-cn')` 不够？
+### 2. Element Plus 日期选择器配置
 
-`dayjs.locale('zh-cn')` 只是设置了语言环境（如月份名称、星期名称等），但 `startOf('week')` 和 `endOf('week')` 方法默认使用的是周日作为一周的开始。
-
-要正确设置周一为一周的第一天，有两种方法：
-
-1. **使用 `isoWeek` 插件**（推荐）：ISO 标准定义周一为一周的第一天
-   - 使用 `startOf('isoWeek')` 和 `endOf('isoWeek')`
-
-2. **使用 `updateLocale` 插件**：
-   - 调用 `dayjs.updateLocale('zh-cn', { weekStart: 1 })`
-   - 然后可以继续使用 `startOf('week')` 和 `endOf('week')`
-
-### Element Plus 日期选择器
-
-Element Plus 的日期选择器已经通过 `:first-day-of-week="1"` 属性正确设置了周一为一周的第一天：
+**方法一：使用 `el-config-provider` 包裹组件（推荐）**
 
 ```vue
-<el-date-picker 
-  :first-day-of-week="1"
-  ...
-/>
+<script setup>
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+</script>
+
+<template>
+  <el-config-provider :locale="zhCn">
+    <el-date-picker
+      v-model="dateValue"
+      type="daterange"
+    />
+  </el-config-provider>
+</template>
 ```
 
-这个设置与 dayjs 的配置是独立的，Element Plus 会正确处理日历显示。
+**方法二：在 main.ts 全局配置**
+
+```typescript
+// main.ts
+import { createApp } from 'vue'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import App from './App.vue'
+
+const app = createApp(App)
+
+// 配置 Element Plus，设置中文语言环境
+// zhCn 语言包默认将周一设为一周的第一天
+app.use(ElementPlus, {
+  locale: zhCn
+})
+
+app.mount('#app')
+```
+
+### 为什么 `:first-day-of-week="1"` 不生效？
+
+在 Element Plus 2.x 版本中，`:first-day-of-week` 属性可能不会正确生效，因为：
+
+1. 需要正确配置语言环境（locale）
+2. 中文语言包 `zh-cn` 已经内置了周一为一周第一天的配置
+3. 使用 `el-config-provider` 或全局配置语言环境是更可靠的方法
+
+### 完整示例
+
+组件中使用 `el-config-provider` 包裹日期选择器：
+
+```vue
+<template>
+  <el-config-provider :locale="zhCn">
+    <el-date-picker
+      ref="dateRef"
+      v-model="dateValue"
+      :type="componentType"
+      :value-format="format"
+    />
+  </el-config-provider>
+</template>
+
+<script setup>
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+</script>
+```
+
+这样日历就会显示：**一 二 三 四 五 六 日**（周一在第一列）

@@ -11,9 +11,12 @@
           <div v-if="value?.isComponents && selectValue.index === index"
             :style="{ width: `${value.label?.length === 1 ? '115' : '200'}px` }"
             class="topDateFilter-bg-timeSelect-date">
-            <el-date-picker ref="dateRef" @change="dateChange" v-model="dateValue" :value-format="value.format"
-              :type="value.componentType" @calendar-change="calendarChange" :first-day-of-week="1"
-              :disabled-date="(time) => disabledDate(time, value)" />
+            <!-- 使用 el-config-provider 包裹确保语言环境正确应用 -->
+            <el-config-provider :locale="zhCn">
+              <el-date-picker ref="dateRef" @change="dateChange" v-model="dateValue" :value-format="value.format"
+                :type="value.componentType" @calendar-change="calendarChange"
+                :disabled-date="(time) => disabledDate(time, value)" />
+            </el-config-provider>
           </div>
         </div>
       </div>
@@ -46,6 +49,8 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import updateLocale from 'dayjs/plugin/updateLocale'
+// 引入 Element Plus 中文语言包
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 // 扩展 dayjs 插件
 dayjs.extend(isoWeek)
