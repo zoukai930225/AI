@@ -252,37 +252,24 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         }
     }
 
-    // 创建填充柄
-    const createFillHandle = () => {
-        if (fillHandle) return
-
-        fillHandle = document.createElement('div')
-        fillHandle.className = 'vxe-fill-handle'
-        fillHandle.title = '拖拽填充，双击填充整列'
-        fillHandle.style.cssText = `
-            position: absolute;
-            width: 8px;
-            height: 8px;
-            background-color: #4285f4;
-            border: 1px solid #fff;
-            cursor: crosshair;
-            z-index: 100;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        `
-        document.body.appendChild(fillHandle)
-
+    // 创建填充柄元素（不立即添加到 DOM）
+    const createFillHandleElement = (): HTMLElement => {
+        const handle = document.createElement('div')
+        handle.className = 'vxe-fill-handle'
+        handle.title = '拖拽填充，双击填充整列'
         // 填充柄的鼠标事件
-        fillHandle.addEventListener('mousedown', handleFillHandleMouseDown)
-        fillHandle.addEventListener('dblclick', handleFillHandleDoubleClick)
+        handle.addEventListener('mousedown', handleFillHandleMouseDown)
+        handle.addEventListener('dblclick', handleFillHandleDoubleClick)
+        return handle
     }
 
-    // 修改 updateFillHandlePosition 函数，确保填充柄使用 fixed 定位
+    // 更新填充柄位置 - 将填充柄添加到右下角单元格内部
     const updateFillHandlePosition = () => {
-        if (!fillHandle) return
+        // 先移除现有的填充柄
+        removeFillHandle()
 
         const { startCell, endCell } = selectionState.value
         if (!startCell || !endCell || !tableRef.value) {
-            fillHandle.style.display = 'none'
             return
         }
 
@@ -292,36 +279,31 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
 
         const bounds = getSelectionBounds()
         if (!bounds) {
-            fillHandle.style.display = 'none'
             return
         }
 
         // 找到右下角单元格
         const bottomRightRowData = data[bounds.maxRow]
         if (!bottomRightRowData) {
-            fillHandle.style.display = 'none'
             return
         }
 
         const bottomRightRowId = table.getRowid(bottomRightRowData)
         const bottomRightColumn = columns[bounds.maxCol]
         if (!bottomRightColumn) {
-            fillHandle.style.display = 'none'
             return
         }
 
-        const cellSelector = `.vxe-body--row[rowid="${bottomRightRowId}"] .vxe-body--column[colid="${bottomRightColumn.id}"]`
+        const cellSelector = `.vxe-body--row[rowid="${bottomRightRowId}"] .vxe-body--column[colid="${bottomRightColumn.id}"] .vxe-cell`
         const cell = document.querySelector(cellSelector) as HTMLElement
 
         if (!cell) {
-            fillHandle.style.display = 'none'
             return
         }
 
-        const rect = cell.getBoundingClientRect()
-        fillHandle.style.display = 'block'
-        fillHandle.style.left = `${rect.right - 4}px`
-        fillHandle.style.top = `${rect.bottom - 4}px`
+        // 创建新的填充柄并添加到单元格内部
+        fillHandle = createFillHandleElement()
+        cell.appendChild(fillHandle)
     }
 
     // 移除填充柄
@@ -721,7 +703,7 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         clearSelectionVisual()
 
         if (!startCell || !endCell || !tableRef.value) {
-            if (fillHandle) fillHandle.style.display = 'none'
+            removeFillHandle()
             return
         }
 
@@ -795,9 +777,8 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         // 清除所有视觉样式
         clearSelectionVisual()
 
-        if (fillHandle) {
-            fillHandle.style.display = 'none'
-        }
+        // 移除填充柄
+        removeFillHandle()
 
         clearFillPreview()
     }
@@ -1043,17 +1024,19 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
       }
       
       /* 填充柄样式 */
+      /* 填充柄样式 - 相对于单元格定位 */
       .vxe-fill-handle {
-        position: fixed;
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
         width: 8px;
         height: 8px;
         background-color: #4285f4;
         border: 1px solid #fff;
         cursor: crosshair;
-        z-index: 1000;
+        z-index: 10;
         box-shadow: 0 1px 3px rgba(0,0,0,0.3);
         transition: transform 0.1s ease;
-        display: none;
       }
       
       .vxe-fill-handle:hover {
@@ -1306,7 +1289,6 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
     // 初始化
     onMounted(() => {
         addStyles()
-        createFillHandle()
 
         document.addEventListener('mousedown', handleMouseDown)
         document.addEventListener('mousemove', handleMouseMove)
