@@ -6,78 +6,50 @@
 
 2. **Element Plus 日期选择器问题**：日历显示周日（日）在第一列，而不是周一（一）。
 
-## 解决方案
+## 重要：使用 unplugin-element-plus 按需导入时的配置
 
-### 1. 创建自定义语言配置文件
-
-创建 `src/locale/zhCnCustom.ts`：
+如果您使用 `unplugin-element-plus` 和 `unplugin-vue-components` 按需导入组件：
 
 ```typescript
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+// vite.config.ts
+import ElementPlus from 'unplugin-element-plus/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+```
 
-const zhCnCustom = {
-  name: 'zh-cn',
+**`app.use(ElementPlus, { locale })` 全局配置不会生效！**
+
+必须在 `App.vue` 中使用 `ElConfigProvider` 包裹整个应用。
+
+## 解决方案
+
+### 1. 修改 App.vue（关键！）
+
+```vue
+<script setup lang="ts">
+import { ElConfigProvider } from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+
+// 创建自定义语言配置，强制设置周一为第一天
+const customLocale = {
   ...zhCn,
   el: {
     ...zhCn.el,
     datepicker: {
       ...zhCn.el.datepicker,
-      // 设置周一为一周的第一天 (1 = 周一, 7 = 周日)
-      firstDayOfWeek: 1,
-      weeks: {
-        sun: '日',
-        mon: '一',
-        tue: '二',
-        wed: '三',
-        thu: '四',
-        fri: '五',
-        sat: '六'
-      }
+      firstDayOfWeek: 1
     }
   }
 }
-
-export default zhCnCustom
-```
-
-### 2. 在 main.ts 全局配置（重要！）
-
-```typescript
-import { createApp } from 'vue'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-import zhCnCustom from './locale/zhCnCustom'
-import App from './App.vue'
-
-const app = createApp(App)
-
-// 使用自定义语言配置
-app.use(ElementPlus, {
-  locale: zhCnCustom
-})
-
-app.mount('#app')
-```
-
-### 3. 组件中使用 el-config-provider（可选，双重保险）
-
-```vue
-<template>
-  <el-config-provider :locale="zhCnCustom">
-    <el-date-picker
-      v-model="dateValue"
-      type="daterange"
-      :first-day-of-week="1"
-    />
-  </el-config-provider>
-</template>
-
-<script setup>
-import zhCnCustom from '@/locale/zhCnCustom'
 </script>
+
+<template>
+  <ElConfigProvider :locale="customLocale">
+    <router-view />
+  </ElConfigProvider>
+</template>
 ```
 
-### 4. dayjs 配置
+### 2. dayjs 配置
 
 ```typescript
 import dayjs from 'dayjs'
@@ -97,126 +69,36 @@ const weekStart = dayjs(date).startOf('isoWeek').format('YYYY-MM-DD')
 const weekEnd = dayjs(date).endOf('isoWeek').format('YYYY-MM-DD')
 ```
 
-## 环境差异问题排查
+## 为什么 unplugin 按需导入时全局配置不生效？
 
-如果测试环境正常，但本地开发和生产环境失效：
+使用 `unplugin-element-plus` 和 `ElementPlusResolver` 时：
 
-### 可能原因
-
-1. **Vite HMR（热更新）问题**：开发模式下，热更新可能导致语言配置被重置
-2. **模块加载顺序**：不同构建模式下，模块加载顺序可能不同
-3. **代码分割**：生产环境的代码分割可能影响配置加载时机
-
-### 解决方案
-
-#### 1. 使用插件模式确保配置一致
-
-创建 `src/plugins/elementPlus.ts`：
-
-```typescript
-import type { App } from 'vue'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
-
-function createCustomLocale() {
-  // 使用 JSON 深拷贝确保完全独立的对象
-  const customLocale = JSON.parse(JSON.stringify(zhCn))
-  customLocale.el.datepicker.firstDayOfWeek = 1
-  return customLocale
-}
-
-export const zhCnCustom = createCustomLocale()
-
-export function setupElementPlus(app: App) {
-  app.use(ElementPlus, {
-    locale: zhCnCustom
-  })
-}
-```
-
-在 `main.ts` 中使用：
-
-```typescript
-import { createApp } from 'vue'
-import { setupElementPlus } from './plugins/elementPlus'
-import App from './App.vue'
-
-const app = createApp(App)
-setupElementPlus(app)
-app.mount('#app')
-```
-
-#### 2. 检查 App.vue 中是否有全局 ConfigProvider
-
-如果 `App.vue` 中有 `<el-config-provider>`，需要同样设置 locale：
-
-```vue
-<template>
-  <el-config-provider :locale="zhCnCustom">
-    <router-view />
-  </el-config-provider>
-</template>
-
-<script setup>
-import { zhCnCustom } from '@/plugins/elementPlus'
-</script>
-```
-
-#### 3. 检查 Vite 配置
-
-确保 `vite.config.ts` 中没有影响模块加载的特殊配置：
-
-```typescript
-export default defineConfig({
-  // 确保 element-plus 不被外部化
-  build: {
-    rollupOptions: {
-      // 不要将 element-plus 放入 external
-    }
-  }
-})
-```
-
-#### 4. 清除所有缓存
-
-```bash
-# 清除 node_modules
-rm -rf node_modules
-rm -rf node_modules/.vite
-
-# 清除 pnpm/npm 缓存
-pnpm store prune  # 或 npm cache clean --force
-
-# 重新安装
-pnpm install  # 或 npm install
-
-# 重启开发服务器
-pnpm dev
-```
+1. 组件是按需自动导入的，不经过 `app.use(ElementPlus)` 
+2. 每个组件独立加载，不会读取全局配置
+3. 只有 `ElConfigProvider` 能为子组件提供配置
 
 ## 验证配置
 
-组件会在开发模式下自动输出配置信息到控制台：
+修改 `App.vue` 后，打开浏览器控制台：
 
+```javascript
+// 检查日历是否显示周一在第一列
+// 日历头应该是：一 二 三 四 五 六 日
 ```
-[TimeFilter] Element Plus locale firstDayOfWeek: 1
-```
 
-如果输出的值不是 `1`，说明配置没有正确加载。
+## 常见问题
 
-## 终极解决方案
+### Q: 已有 ElConfigProvider 但没设置 locale
 
-如果以上方法都不生效，可以在组件挂载时强制设置：
+检查您现有的 `App.vue`，可能已经有 `ElConfigProvider` 但没有设置 `locale` 属性。
 
-```typescript
-import { onMounted } from 'vue'
+### Q: 多层 ElConfigProvider
 
-onMounted(() => {
-  // 强制修改 Element Plus 内部配置
-  const configProvider = document.querySelector('.el-config-provider')
-  if (configProvider) {
-    // 触发重新渲染
-  }
-})
+如果有多层 `ElConfigProvider`，确保最外层设置了正确的 locale。
+
+### Q: 缓存问题
+
+```bash
+rm -rf node_modules/.vite
+pnpm dev  # 或 npm run dev
 ```

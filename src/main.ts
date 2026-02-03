@@ -1,10 +1,12 @@
 import { createApp } from 'vue'
-import { setupElementPlus } from './plugins/elementPlus'
+// 注意：使用 unplugin-element-plus 按需导入时，不需要全局 app.use(ElementPlus)
+// 语言配置需要在 App.vue 中通过 ElConfigProvider 设置
 import App from './App.vue'
 
 const app = createApp(App)
 
-// 使用 Element Plus 配置插件（包含自定义语言配置）
-setupElementPlus(app)
+// 其他插件配置...
+// app.use(router)
+// app.use(pinia)
 
 app.mount('#app')

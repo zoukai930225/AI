@@ -11,12 +11,10 @@
           <div v-if="value?.isComponents && selectValue.index === index"
             :style="{ width: `${value.label?.length === 1 ? '115' : '200'}px` }"
             class="topDateFilter-bg-timeSelect-date">
-            <!-- 使用 el-config-provider 包裹，传入自定义语言配置确保周一为第一天 -->
-            <el-config-provider :locale="zhCnCustom">
-              <el-date-picker ref="dateRef" @change="dateChange" v-model="dateValue" :value-format="value.format"
-                :type="value.componentType" @calendar-change="calendarChange" :first-day-of-week="1"
-                :disabled-date="(time) => disabledDate(time, value)" />
-            </el-config-provider>
+            <!-- 语言配置已在 App.vue 的 ElConfigProvider 中全局设置 -->
+            <el-date-picker ref="dateRef" @change="dateChange" v-model="dateValue" :value-format="value.format"
+              :type="value.componentType" @calendar-change="calendarChange"
+              :disabled-date="(time) => disabledDate(time, value)" />
           </div>
         </div>
       </div>
@@ -49,8 +47,6 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import updateLocale from 'dayjs/plugin/updateLocale'
-// 引入自定义中文语言配置（强制周一为第一天）
-import { zhCnCustom } from '@/plugins/elementPlus'
 
 // 扩展 dayjs 插件
 dayjs.extend(isoWeek)
@@ -64,10 +60,6 @@ dayjs.updateLocale('zh-cn', {
   weekStart: 1 // 周一为一周的第一天
 })
 
-// 开发环境下验证配置
-if (import.meta.env.DEV) {
-  console.log('[TimeFilter] Element Plus locale firstDayOfWeek:', zhCnCustom?.el?.datepicker?.firstDayOfWeek)
-}
 
 const message = useMessage()
 
