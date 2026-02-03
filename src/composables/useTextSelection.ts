@@ -1037,12 +1037,6 @@ export const useTextSelection = (options: UseTextSelectionOptions) => {
         cursor: crosshair;
         z-index: 10;
         box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-      }
-      
-      .vxe-fill-handle:hover {
-        transform: scale(3);
-        box-shadow: 0 2px 8px rgba(66, 133, 244, 0.6);
       }
       
       .copy-tooltip {
