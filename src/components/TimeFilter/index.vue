@@ -12,9 +12,9 @@
             :style="{ width: `${value.label?.length === 1 ? '115' : '200'}px` }"
             class="topDateFilter-bg-timeSelect-date">
             <!-- 使用 el-config-provider 包裹，传入自定义语言配置确保周一为第一天 -->
-            <el-config-provider :locale="customZhCn">
+            <el-config-provider :locale="zhCnCustom">
               <el-date-picker ref="dateRef" @change="dateChange" v-model="dateValue" :value-format="value.format"
-                :type="value.componentType" @calendar-change="calendarChange"
+                :type="value.componentType" @calendar-change="calendarChange" :first-day-of-week="1"
                 :disabled-date="(time) => disabledDate(time, value)" />
             </el-config-provider>
           </div>
@@ -49,8 +49,8 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import updateLocale from 'dayjs/plugin/updateLocale'
-// 引入 Element Plus 中文语言包
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+// 引入自定义中文语言配置（强制周一为第一天）
+import zhCnCustom from '@/locale/zhCnCustom'
 
 // 扩展 dayjs 插件
 dayjs.extend(isoWeek)
@@ -63,29 +63,6 @@ dayjs.locale('zh-cn')
 dayjs.updateLocale('zh-cn', {
   weekStart: 1 // 周一为一周的第一天
 })
-
-// 创建自定义语言配置，强制设置周一为一周的第一天
-const customZhCn = {
-  ...zhCn,
-  el: {
-    ...zhCn.el,
-    datepicker: {
-      ...zhCn.el.datepicker,
-      // 重新排列星期显示顺序：周一到周日
-      weeks: {
-        sun: '日',
-        mon: '一',
-        tue: '二',
-        wed: '三',
-        thu: '四',
-        fri: '五',
-        sat: '六'
-      },
-      // Element Plus 内部使用这个属性来确定一周的第一天
-      firstDayOfWeek: 1
-    }
-  }
-}
 
 const message = useMessage()
 
